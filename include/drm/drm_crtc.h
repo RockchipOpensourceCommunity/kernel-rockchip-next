@@ -569,6 +569,7 @@ struct drm_encoder_funcs {
 /**
  * struct drm_encoder - central DRM encoder structure
  * @dev: parent DRM device
+ * @of_node: device node pointer to the bridge
  * @head: list management
  * @base: base KMS object
  * @name: encoder name
@@ -585,6 +586,10 @@ struct drm_encoder_funcs {
  */
 struct drm_encoder {
 	struct drm_device *dev;
+#ifdef CONFIG_OF
+	struct device_node *of_node;
+#endif
+	struct list_head list;
 	struct list_head head;
 
 	struct drm_mode_object base;
@@ -1230,6 +1235,9 @@ extern void drm_bridge_remove(struct drm_bridge *bridge);
 extern struct drm_bridge *of_drm_find_bridge(struct device_node *np);
 extern int drm_bridge_attach(struct drm_device *dev, struct drm_bridge *bridge);
 
+extern int drm_encoder_add(struct drm_encoder *encoder);
+extern void drm_encoder_remove(struct drm_encoder *encoder);
+extern struct drm_encoder *of_drm_find_encoder(struct device_node *np);
 extern int drm_encoder_init(struct drm_device *dev,
 			    struct drm_encoder *encoder,
 			    const struct drm_encoder_funcs *funcs,

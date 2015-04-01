@@ -1058,6 +1058,47 @@ void drm_connector_unplug_all(struct drm_device *dev)
 }
 EXPORT_SYMBOL(drm_connector_unplug_all);
 
+static DEFINE_MUTEX(encoder_lock);
+static LIST_HEAD(encoder_list);
+
+int drm_encoder_add(struct drm_encoder *encoder)
+{
+	mutex_lock(&encoder_lock);
+	list_add_tail(&encoder->list, &encoder_list);
+	mutex_unlock(&encoder_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(drm_encoder_add);
+
+void drm_encoder_remove(struct drm_encoder *encoder)
+{
+	mutex_lock(&encoder_lock);
+	list_del_init(&encoder->list);
+	mutex_unlock(&encoder_lock);
+}
+EXPORT_SYMBOL(drm_encoder_remove);
+
+#ifdef CONFIG_OF
+struct drm_encoder *of_drm_find_encoder(struct device_node *np)
+{
+	struct drm_encoder *encoder;
+
+	mutex_lock(&encoder_lock);
+
+	list_for_each_entry(encoder, &encoder_list, list) {
+		if (encoder->of_node == np) {
+			mutex_unlock(&encoder_lock);
+			return encoder;
+		}
+	}
+
+	mutex_unlock(&encoder_lock);
+	return NULL;
+}
+EXPORT_SYMBOL(of_drm_find_encoder);
+#endif
+
 /**
  * drm_encoder_init - Init a preallocated encoder
  * @dev: drm device
