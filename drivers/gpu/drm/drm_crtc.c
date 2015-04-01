@@ -844,6 +844,47 @@ static void drm_connector_get_cmdline_mode(struct drm_connector *connector)
 		      mode->interlace ?  " interlaced" : "");
 }
 
+static DEFINE_MUTEX(connector_lock);
+static LIST_HEAD(connector_list);
+
+int drm_connector_add(struct drm_connector *connector)
+{
+	mutex_lock(&connector_lock);
+	list_add_tail(&connector->list, &connector_list);
+	mutex_unlock(&connector_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(drm_connector_add);
+
+void drm_connector_remove(struct drm_connector *connector)
+{
+	mutex_lock(&connector_lock);
+	list_del_init(&connector->list);
+	mutex_unlock(&connector_lock);
+}
+EXPORT_SYMBOL(drm_connector_remove);
+
+#ifdef CONFIG_OF
+struct drm_connector *of_drm_find_connector(struct device_node *np)
+{
+	struct drm_connector *connector;
+
+	mutex_lock(&connector_lock);
+
+	list_for_each_entry(connector, &connector_list, list) {
+		if (connector->of_node == np) {
+			mutex_unlock(&connector_lock);
+			return connector;
+		}
+	}
+
+	mutex_unlock(&connector_lock);
+	return NULL;
+}
+EXPORT_SYMBOL(of_drm_find_connector);
+#endif
+
 /**
  * drm_connector_init - Init a preallocated connector
  * @dev: DRM device

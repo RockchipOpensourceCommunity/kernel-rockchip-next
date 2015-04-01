@@ -671,6 +671,10 @@ struct drm_encoder {
  */
 struct drm_connector {
 	struct drm_device *dev;
+#ifdef CONFIG_OF
+	struct device_node *of_node;
+#endif
+	struct list_head list;
 	struct device *kdev;
 	struct device_attribute *attr;
 	struct list_head head;
@@ -1218,6 +1222,9 @@ static inline uint32_t drm_crtc_mask(struct drm_crtc *crtc)
 
 extern void drm_connector_ida_init(void);
 extern void drm_connector_ida_destroy(void);
+extern int drm_connector_add(struct drm_connector *connector);
+extern void drm_connector_remove(struct drm_connector *connector);
+extern struct drm_connector *of_drm_find_connector(struct device_node *np);
 extern int drm_connector_init(struct drm_device *dev,
 			      struct drm_connector *connector,
 			      const struct drm_connector_funcs *funcs,
