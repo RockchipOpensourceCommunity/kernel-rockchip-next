@@ -1,0 +1,4 @@
+menu "Standalone components for use with the component framework"
+     depends on DRM && DRM_KMS_HELPER
+
+endmenu
