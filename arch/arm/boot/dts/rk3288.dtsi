@@ -562,7 +562,7 @@
 				  <&cru HCLK_CPU>, <&cru PCLK_CPU>,
 				  <&cru ACLK_PERI>, <&cru HCLK_PERI>,
 				  <&cru PCLK_PERI>;
-		assigned-clock-rates = <594000000>, <400000000>,
+		assigned-clock-rates = <594000000>, <532500000>,
 				       <500000000>, <300000000>,
 				       <150000000>, <75000000>,
 				       <300000000>, <150000000>,
