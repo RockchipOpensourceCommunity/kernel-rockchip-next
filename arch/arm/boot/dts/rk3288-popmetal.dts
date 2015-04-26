@@ -47,6 +47,37 @@
                 };
         };
 
+	vcc_sys: vsys-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_sys";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	vcc_5v: usb-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vcc_sys>;
+	};
+
+	vcc_host_5v: usb-host-regulator {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&host_vbus_drv>;
+		regulator-name = "vcc_host_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+		vin-supply = <&vcc_5v>;
+	};
  };
 
 &emmc {
@@ -142,6 +173,8 @@
 			vcc_ddr: DCDC_REG3 {
                                 regulator-always-on;
                                 regulator-boot-on;
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1350000>;
                                 regulator-name = "vcc_ddr";
                                 regulator-state-mem {
                                         regulator-on-in-suspend;
@@ -292,6 +325,14 @@
 };
 
 &pinctrl {
+	pcfg_output_high: pcfg-output-high {
+		output-high;
+	};
+
+	pcfg_output_low: pcfg-output-low {
+		output-low;
+	};
+
 	buttons {
                 pwrbtn: pwrbtn {
                         rockchip,pins = <0 5 RK_FUNC_GPIO &pcfg_pull_up>;
@@ -303,22 +344,37 @@
                         rockchip,pins = <RK_GPIO0 4 RK_FUNC_GPIO &pcfg_pull_up>;
                 };
         };
+	usb_host {
+		host_vbus_drv: host-vbus-drv {
+			rockchip,pins = <0 14 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		usbhub_rst: usbhub-rst {
+			rockchip,pins = <7 3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	usb_otg {
+		otg_vbus_drv: otg-vbus-drv {
+			rockchip,pins = <0 12 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
 };
 
 &vopb {
-        status = "disabled";
+        status = "okay";
 };
 
 &vopb_mmu {
-        status = "disabled";
+        status = "okay";
 };
 
 &vopl {
-        status = "disabled";
+        status = "okay";
 };
 
 &vopl_mmu {
-        status = "disabled";
+        status = "okay";
 };
 
 &uart0 {
@@ -341,6 +397,20 @@
         status = "okay";
 };
 
-&usbphy {
+&usb_host0_ehci {
+	status = "okay";
+};
+
+&usb_host1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&usbhub_rst>;
+	status = "okay";
+};
+
+&usb_otg {
+	status = "okay";
+};
+
+&usb_hsic {
 	status = "okay";
 };
