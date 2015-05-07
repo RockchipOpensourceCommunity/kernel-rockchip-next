@@ -167,10 +167,13 @@ static void rockchip_lvds_connector_destroy(struct drm_connector *connector)
 }
 
 static struct drm_connector_funcs rockchip_lvds_connector_funcs = {
-	.dpms = drm_helper_connector_dpms,
+	.dpms = drm_atomic_helper_connector_dpms,
+	.reset = drm_atomic_helper_connector_reset,
 	.detect = rockchip_lvds_connector_detect,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.destroy = rockchip_lvds_connector_destroy,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
 static int rockchip_lvds_connector_get_modes(struct drm_connector *connector)

@@ -168,6 +168,8 @@ static void rockchip_drm_output_poll_changed(struct drm_device *dev)
 static const struct drm_mode_config_funcs rockchip_drm_mode_config_funcs = {
 	.fb_create = rockchip_user_fb_create,
 	.output_poll_changed = rockchip_drm_output_poll_changed,
+	.atomic_check = drm_atomic_helper_check,
+	.atomic_commit = drm_atomic_helper_commit,
 };
 
 struct drm_framebuffer *

@@ -20,6 +20,7 @@
 #include <linux/i2c.h>
 #include <linux/regulator/consumer.h>
 #include <linux/of_graph.h>
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drmP.h>
 #include <drm/drm_crtc.h>
@@ -56,10 +57,13 @@ void vga_connector_connector_destroy(struct drm_connector *connector)
 }
 
 struct drm_connector_funcs vga_connector_connector_funcs = {
-	.dpms = drm_helper_connector_dpms,
+	.dpms = drm_atomic_helper_connector_dpms,
+	.reset = drm_atomic_helper_connector_reset,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = vga_connector_detect,
 	.destroy = vga_connector_connector_destroy,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
 /*

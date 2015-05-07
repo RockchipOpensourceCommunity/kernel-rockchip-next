@@ -276,6 +276,8 @@ static const struct vop_reg_data vop_init_reg_table[] = {
 	{DSP_CTRL0, 0x00000000},
 	{WIN0_CTRL0, 0x00000080},
 	{WIN1_CTRL0, 0x00000080},
+	{WIN2_CTRL0, 0x00000010},
+	{WIN3_CTRL0, 0x00000010},
 };
 
 /*
@@ -606,7 +608,7 @@ static int vop_update_plane_event(struct drm_plane *plane,
 		.x2 = crtc->mode.hdisplay,
 		.y2 = crtc->mode.vdisplay,
 	};
-	bool can_position = plane->type != DRM_PLANE_TYPE_PRIMARY;
+	bool can_position = true;// plane->type != DRM_PLANE_TYPE_PRIMARY;
 
 	ret = drm_plane_helper_check_update(plane, crtc, fb,
 					    &src, &dest, &clip,
@@ -783,6 +785,9 @@ static const struct drm_plane_funcs vop_plane_funcs = {
 	.update_plane = vop_update_plane,
 	.disable_plane = vop_disable_plane,
 	.destroy = vop_plane_destroy,
+	.reset = drm_atomic_helper_plane_reset,
+	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_plane_destroy_state,
 };
 
 int rockchip_drm_crtc_mode_config(struct drm_crtc *crtc,
@@ -1027,6 +1032,9 @@ static const struct drm_crtc_funcs vop_crtc_funcs = {
 	.set_config = drm_crtc_helper_set_config,
 	.page_flip = vop_crtc_page_flip,
 	.destroy = vop_crtc_destroy,
+	.reset = drm_atomic_helper_crtc_reset,
+	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_crtc_destroy_state,
 };
 
 static bool vop_win_state_is_active(struct vop_win *vop_win,
