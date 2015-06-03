@@ -596,6 +596,53 @@
 		pinctrl-0 = <&i2s0_bus>;
 		status = "disabled";
 	};
+	
+	ion {
+		compatible = "rockchip,ion";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ion_drm: rockchip,ion-heap@5 {
+			compatible = "rockchip,ion-heap";
+			rockchip,ion_heap = <5>;
+			reg = <0x00000000 0x00000000>;
+		};
+		ion_cma: rockchip,ion-heap@4 { /* CMA HEAP */
+			compatible = "rockchip,ion-heap";
+			rockchip,ion_heap = <4>;
+			reg = <0x00000000 0x28000000>; /* 640MB */
+		};
+		rockchip,ion-heap@0 { /* VMALLOC HEAP */
+			compatible = "rockchip,ion-heap";
+			rockchip,ion_heap = <0>;
+		};
+	};
+
+    vpu: vpu_service@ff9a0000 {
+        compatible = "vpu_service";
+        iommus = <0>;
+        reg = <0xff9a0000 0x800>;
+        interrupts = <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
+        interrupt-names = "irq_enc", "irq_dec";
+        clocks = <&cru ACLK_VCODEC>, <&cru HCLK_VCODEC>;
+        clock-names = "aclk_vcodec", "hclk_vcodec";
+        name = "vpu_service";
+        dev_mode = <0>;
+        //status = "disabled";
+    };
+     
+    //hevc: hevc_service@ff9c0000 {
+    //    compatible = "rockchip,hevc_service";
+    //    iommu_enabled = <0>;
+    //    reg = <0xff9c0000 0x800>;
+    //    interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
+    //    interrupt-names = "irq_dec";
+    //    clocks = <&aclk_hevc>, <&hclk_hevc>, <&clk_hevc_core>, <&clk_hevc_cabac>;
+    //    clock-names = "aclk_vcodec", "hclk_vcodec", "clk_core", "clk_cabac";
+    //    dev_mode = <1>;
+    //    name = "hevc_service";
+        //status = "disabled";
+    //};
 
 	vopb: vop@ff930000 {
 		compatible = "rockchip,rk3288-vop";

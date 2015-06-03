@@ -76,7 +76,7 @@ struct ion_platform_data {
  *		size
  *
  * Calls memblock reserve to set aside memory for heaps that are
- * located at specific memory addresses or of specfic sizes not
+ * located at specific memory addresses or of specific sizes not
  * managed by the kernel
  */
 void ion_reserve(struct ion_platform_data *data);
@@ -84,7 +84,6 @@ void ion_reserve(struct ion_platform_data *data);
 /**
  * ion_client_create() -  allocate a client and returns it
  * @dev:		the global ion device
- * @heap_type_mask:	mask of heaps this client can allocate from
  * @name:		used for debugging
  */
 struct ion_client *ion_client_create(struct ion_device *dev,
@@ -201,23 +200,4 @@ int ion_share_dma_buf_fd(struct ion_client *client, struct ion_handle *handle);
  */
 struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd);
 
-/**
- * ion_handle_get() - ref ion buffer.
- */
-void ion_handle_get(struct ion_handle *handle);
-/**
- * ion_handle_put() - unref ion buffer.
- */
-int ion_handle_put(struct ion_handle *handle);
-
-#ifdef CONFIG_ARCH_ROCKCHIP
-struct device;
-
-int ion_map_iommu(struct device *iommu_dev, struct ion_client *client,
-		  struct ion_handle *handle, unsigned long *iova,
-		  unsigned long *size);
-
-void ion_unmap_iommu(struct device *iommu_dev, struct ion_client *client,
-		     struct ion_handle *handle);
-#endif
 #endif /* _LINUX_ION_H */

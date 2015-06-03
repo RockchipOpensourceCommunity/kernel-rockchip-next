@@ -1,5 +1,5 @@
 /*
- * drivers/gpu/ion/ion_carveout_heap.c
+ * drivers/staging/android/ion/ion_carveout_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
  *
@@ -81,7 +81,7 @@ static int ion_carveout_heap_allocate(struct ion_heap *heap,
 	if (align > PAGE_SIZE)
 		return -EINVAL;
 
-	table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+	table = kmalloc(sizeof(struct sg_table), GFP_KERNEL);
 	if (!table)
 		return -ENOMEM;
 	ret = sg_alloc_table(table, 1, GFP_KERNEL);
@@ -133,7 +133,6 @@ static struct sg_table *ion_carveout_heap_map_dma(struct ion_heap *heap,
 static void ion_carveout_heap_unmap_dma(struct ion_heap *heap,
 					struct ion_buffer *buffer)
 {
-	return;
 }
 
 static struct ion_heap_ops carveout_heap_ops = {
@@ -157,8 +156,6 @@ struct ion_heap *ion_carveout_heap_create(struct ion_platform_heap *heap_data)
 
 	page = pfn_to_page(PFN_DOWN(heap_data->base));
 	size = heap_data->size;
-
-	printk("%s: %zx@%lx\n", __func__, size, heap_data->base);
 
 	ion_pages_sync_for_device(NULL, page, size, DMA_BIDIRECTIONAL);
 
