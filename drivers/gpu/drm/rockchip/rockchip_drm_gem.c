@@ -15,6 +15,7 @@
 #include <drm/drm.h>
 #include <drm/drmP.h>
 #include <drm/drm_gem.h>
+#include <linux/dma-buf.h>
 #include <drm/drm_vma_manager.h>
 
 #include <linux/dma-attrs.h>
@@ -69,6 +70,37 @@ int rockchip_gem_mmap_buf(struct drm_gem_object *obj,
 
 	return dma_mmap_attrs(drm->dev, vma, rk_obj->kvaddr, rk_obj->dma_addr,
 			     obj->size, &rk_obj->dma_attrs);
+}
+
+struct drm_gem_object *
+rockchip_gem_prime_import_sg_table(struct drm_device *drm,
+				  struct dma_buf_attachment *attach,
+				  struct sg_table *sgt)
+{
+	struct rockchip_gem_object *rk_obj;
+	struct drm_gem_object *obj;
+	int ret;
+
+	rk_obj = kzalloc(sizeof(*rk_obj), GFP_KERNEL);
+	if (!rk_obj)
+		return ERR_PTR(-ENOMEM);
+
+	obj = &rk_obj->base;
+
+	drm_gem_private_object_init(drm, obj, attach->dmabuf->size);
+
+	if (!dma_map_sg(drm->dev, sgt->sgl, sgt->nents, DMA_TO_DEVICE)) {
+		ret =-ENOMEM;
+		goto err_free_obj;
+	}
+	rk_obj->dma_addr = sg_dma_address(sgt->sgl);
+	rk_obj->sgt = sgt;
+	obj->size = sg_dma_len(sgt->sgl);
+
+	return obj;
+err_free_obj:
+	kfree(rk_obj);
+	return NULL;
 }
 
 /* drm driver mmap file operations */
@@ -141,12 +173,19 @@ err_free_rk_obj:
 void rockchip_gem_free_object(struct drm_gem_object *obj)
 {
 	struct rockchip_gem_object *rk_obj;
-
-	drm_gem_free_mmap_offset(obj);
+	struct drm_device *drm = obj->dev;
 
 	rk_obj = to_rockchip_obj(obj);
 
-	rockchip_gem_free_buf(rk_obj);
+	if (obj->import_attach) {
+		dma_unmap_sg(drm->dev, rk_obj->sgt->sgl, rk_obj->sgt->nents, DMA_TO_DEVICE);
+		drm_prime_gem_destroy(obj, rk_obj->sgt);
+	//	sg_free_table(rk_obj->sgt);
+	//	kfree(rk_obj->sgt);
+	} else {
+		drm_gem_free_mmap_offset(obj);
+		rockchip_gem_free_buf(rk_obj);
+	}
 
 	kfree(rk_obj);
 }

@@ -57,6 +57,8 @@
 
 #define VOP_WIN_GET_YRGBADDR(vop, win) \
 		vop_readl(vop, win->base + win->phy->yrgb_mst.offset)
+#define VOP_SCL_SET(x, win, name, v) \
+		REG_SET(x, win->base, win->scl->name, v, RELAXED)
 
 #define to_vop(x) container_of(x, struct vop, crtc)
 #define to_vop_win(x) container_of(x, struct vop_win, base)
@@ -181,9 +183,39 @@ struct vop_win_phy {
 	struct vop_reg src_alpha_ctl;
 };
 
+struct vop_scl_regs {
+	struct vop_reg cbr_vsd_mode;
+	struct vop_reg cbr_vsu_mode;
+	struct vop_reg cbr_hsd_mode;
+	struct vop_reg cbr_ver_scl_mode;
+	struct vop_reg cbr_hor_scl_mode;
+	struct vop_reg yrgb_vsd_mode;
+	struct vop_reg yrgb_vsu_mode;
+	struct vop_reg yrgb_hsd_mode;
+	struct vop_reg yrgb_ver_scl_mode;
+	struct vop_reg yrgb_hor_scl_mode;
+	struct vop_reg line_load_mode;
+	struct vop_reg cbr_axi_gather_num;
+	struct vop_reg yrgb_axi_gather_num;
+	struct vop_reg vsd_cbr_gt2;
+	struct vop_reg vsd_cbr_gt4;
+	struct vop_reg vsd_yrgb_gt2;
+	struct vop_reg vsd_yrgb_gt4;
+	struct vop_reg bic_coe_sel;
+	struct vop_reg cbr_axi_gather_en;
+	struct vop_reg yrgb_axi_gather_en;
+
+	struct vop_reg lb_mode;
+	struct vop_reg scale_yrgb_x;
+	struct vop_reg scale_yrgb_y;
+	struct vop_reg scale_cbcr_x;
+	struct vop_reg scale_cbcr_y;
+};
+
 struct vop_win_data {
 	uint32_t base;
 	const struct vop_win_phy *phy;
+	const struct vop_scl_regs *scl;
 	enum drm_plane_type type;
 };
 
@@ -210,6 +242,34 @@ static const uint32_t formats_234[] = {
 	DRM_FORMAT_ARGB8888,
 	DRM_FORMAT_RGB888,
 	DRM_FORMAT_RGB565,
+};
+
+static const struct vop_scl_regs win_full_scl = {
+	.cbr_vsd_mode = VOP_REG(WIN0_CTRL1, 0x1, 31),
+	.cbr_vsu_mode = VOP_REG(WIN0_CTRL1, 0x1, 30),
+	.cbr_hsd_mode = VOP_REG(WIN0_CTRL1, 0x3, 28),
+	.cbr_ver_scl_mode = VOP_REG(WIN0_CTRL1, 0x3, 26),
+	.cbr_hor_scl_mode = VOP_REG(WIN0_CTRL1, 0x3, 24),
+	.yrgb_vsd_mode = VOP_REG(WIN0_CTRL1, 0x1, 23),
+	.yrgb_vsu_mode = VOP_REG(WIN0_CTRL1, 0x1, 22),
+	.yrgb_hsd_mode = VOP_REG(WIN0_CTRL1, 0x3, 20),
+	.yrgb_ver_scl_mode = VOP_REG(WIN0_CTRL1, 0x3, 18),
+	.yrgb_hor_scl_mode = VOP_REG(WIN0_CTRL1, 0x3, 16),
+	.line_load_mode = VOP_REG(WIN0_CTRL1, 0x1, 15),
+	.cbr_axi_gather_num = VOP_REG(WIN0_CTRL1, 0x7, 12),
+	.yrgb_axi_gather_num = VOP_REG(WIN0_CTRL1, 0xf, 8),
+	.vsd_cbr_gt2 = VOP_REG(WIN0_CTRL1, 0x1, 7),
+	.vsd_cbr_gt4 = VOP_REG(WIN0_CTRL1, 0x1, 6),
+	.vsd_yrgb_gt2 = VOP_REG(WIN0_CTRL1, 0x1, 5),
+	.vsd_yrgb_gt4 = VOP_REG(WIN0_CTRL1, 0x1, 4),
+	.bic_coe_sel = VOP_REG(WIN0_CTRL1, 0x3, 2),
+	.cbr_axi_gather_en = VOP_REG(WIN0_CTRL1, 0x1, 1),
+	.yrgb_axi_gather_en = VOP_REG(WIN0_CTRL1, 0x1, 0),
+	.lb_mode = VOP_REG(WIN0_CTRL0, 0x7, 5),
+	.scale_yrgb_x = VOP_REG(WIN0_SCL_FACTOR_YRGB, 0xffff, 0x0),
+	.scale_yrgb_y = VOP_REG(WIN0_SCL_FACTOR_YRGB, 0xffff, 16),
+	.scale_cbcr_x = VOP_REG(WIN0_SCL_FACTOR_CBR, 0xffff, 0x0),
+	.scale_cbcr_y = VOP_REG(WIN0_SCL_FACTOR_CBR, 0xffff, 16),
 };
 
 static const struct vop_win_phy win01_data = {
@@ -276,6 +336,12 @@ static const struct vop_reg_data vop_init_reg_table[] = {
 	{DSP_CTRL0, 0x00000000},
 	{WIN0_CTRL0, 0x00000080},
 	{WIN1_CTRL0, 0x00000080},
+	/*
+	 * Todo: win2/3 support area func, but now havn't found a suitable
+	 * way to use it, so default enable area0 as a win display.
+	 */
+	{WIN2_CTRL0, 0x00000010},
+	{WIN3_CTRL0, 0x00000010},
 };
 
 /*
@@ -284,10 +350,10 @@ static const struct vop_reg_data vop_init_reg_table[] = {
  * window 1 for the drm cursor.
  */
 static const struct vop_win_data rk3288_vop_win_data[] = {
-	{ .base = 0x00, .phy = &win01_data, .type = DRM_PLANE_TYPE_PRIMARY },
-	{ .base = 0x40, .phy = &win01_data, .type = DRM_PLANE_TYPE_CURSOR },
+	{ .base = 0x00, .phy = &win01_data, .scl = &win_full_scl, .type = DRM_PLANE_TYPE_PRIMARY },
+	{ .base = 0x40, .phy = &win01_data, .scl = &win_full_scl, .type = DRM_PLANE_TYPE_OVERLAY },
 	{ .base = 0x00, .phy = &win23_data, .type = DRM_PLANE_TYPE_OVERLAY },
-	{ .base = 0x50, .phy = &win23_data, .type = DRM_PLANE_TYPE_OVERLAY },
+	{ .base = 0x50, .phy = &win23_data, .type = DRM_PLANE_TYPE_CURSOR },
 	{ .base = 0x00, .phy = &cursor_data, .type = DRM_PLANE_TYPE_OVERLAY },
 };
 
@@ -349,6 +415,26 @@ static inline void vop_mask_write_relaxed(struct vop *vop, uint32_t offset,
 		writel_relaxed(cached_val, vop->regs + offset);
 		vop->regsbak[offset >> 2] = cached_val;
 	}
+}
+
+static int __getHardWareVSkipLines(u32 srcH, u32 dstH)
+{
+    u32 vScaleDnMult;
+
+    if(srcH >= (u32)(4*dstH*MIN_SCALE_FACTOR_AFTER_VSKIP))
+    {
+        vScaleDnMult = 4;
+    }
+    else if(srcH >= (u32)(2*dstH*MIN_SCALE_FACTOR_AFTER_VSKIP))
+    {
+        vScaleDnMult = 2;
+    }
+    else
+    {
+        vScaleDnMult = 1;
+    }
+
+    return vScaleDnMult;
 }
 
 static enum vop_data_format vop_convert_format(uint32_t format)
@@ -526,6 +612,463 @@ static void vop_disable(struct drm_crtc *crtc)
 	pm_runtime_put(vop->dev);
 }
 
+static int _vop_cal_scl_fac(struct vop *vop, const struct vop_win_data *win, u16 srcW, u16 srcH,
+							u16 dstW, u16 dstH, int format)
+{
+	u16 yrgb_srcW;
+	u16 yrgb_srcH;
+	u16 yrgb_dstW;
+	u16 yrgb_dstH;
+	u32 yrgb_vScaleDnMult;
+	u32 yrgb_xscl_factor;
+	u32 yrgb_yscl_factor;
+	u8  yrgb_vsd_bil_gt2=0;
+	u8  yrgb_vsd_bil_gt4=0;
+	
+	u16 cbcr_srcW;
+	u16 cbcr_srcH;
+	u16 cbcr_dstW;
+	u16 cbcr_dstH;	  
+	u32 cbcr_vScaleDnMult;
+	u32 cbcr_xscl_factor;
+	u32 cbcr_yscl_factor;
+	u8  cbcr_vsd_bil_gt2=0;
+	u8  cbcr_vsd_bil_gt4=0;
+	u8  yuv_fmt=0;
+
+	u16 yrgb_hor_scl_mode;
+	u16 yrgb_ver_scl_mode;
+	u16 cbr_hor_scl_mode;
+	u16 cbr_ver_scl_mode;
+	u16 lb_mode;
+	u16 yrgb_hsd_mode;
+	u16 cbr_hsd_mode;
+	u16 yrgb_vsd_mode;
+	u16 cbr_vsd_mode;
+	u16 yrgb_vsu_mode; 
+	u16 cbr_vsu_mode; 
+	u16 scale_yrgb_x;
+	u16 scale_yrgb_y;
+	u16 vsd_yrgb_gt4;
+	u16 vsd_yrgb_gt2;
+	u16 scale_cbcr_x;
+	u16 scale_cbcr_y;
+	u16 vsd_cbr_gt4;
+	u16 vsd_cbr_gt2;
+
+	/*yrgb scl mode*/
+	yrgb_srcW = srcW;
+	yrgb_srcH = srcH;
+	yrgb_dstW = dstW;
+	yrgb_dstH = dstH;
+	if ((yrgb_dstW*8 <= yrgb_srcW) || (yrgb_dstH*8 <= yrgb_srcH)) {
+		pr_err("ERROR: yrgb scale exceed 8,"
+				"srcW=%d,srcH=%d,dstW=%d,dstH=%d\n",
+				yrgb_srcW,yrgb_srcH,yrgb_dstW,yrgb_dstH);
+	}
+	if(yrgb_srcW < yrgb_dstW)
+		yrgb_hor_scl_mode = SCALE_UP;
+	else if(yrgb_srcW > yrgb_dstW)
+		yrgb_hor_scl_mode = SCALE_DOWN;
+	else
+		yrgb_hor_scl_mode = SCALE_NONE;
+
+	if(yrgb_srcH < yrgb_dstH)
+		yrgb_ver_scl_mode = SCALE_UP;
+	else if (yrgb_srcH  > yrgb_dstH)
+		yrgb_ver_scl_mode = SCALE_DOWN;
+	else
+		yrgb_ver_scl_mode = SCALE_NONE;
+
+	/*cbcr scl mode*/
+	switch (format) {
+		case VOP_FMT_YUV422SP:
+			cbcr_srcW = srcW/2;
+			cbcr_dstW = dstW;
+			cbcr_srcH = srcH;
+			cbcr_dstH = dstH;
+			yuv_fmt = 1;
+			break;
+		case VOP_FMT_YUV420SP:
+			/*
+			 *tmp modify.
+			 */
+			cbcr_srcW = srcW/2;
+			cbcr_srcH = srcH/2;
+			//cbcr_srcH = srcH;
+			//cbcr_srcW = srcW;
+			cbcr_dstW = dstW;
+			cbcr_dstH = dstH;
+			yuv_fmt = 1;
+			break;
+		case VOP_FMT_YUV444SP:
+			cbcr_srcW = srcW;
+			cbcr_dstW = dstW;
+			cbcr_srcH = srcH;
+			cbcr_dstH = dstH;
+			yuv_fmt = 1;
+			break;
+		default:
+			cbcr_srcW = 0;
+			cbcr_dstW = 0;
+			cbcr_srcH = 0;
+			cbcr_dstH = 0;
+			yuv_fmt = 0;
+			break;
+	}
+
+	if (yuv_fmt) {
+		if ((cbcr_dstW*8 <= cbcr_srcW) || (cbcr_dstH*8 <= cbcr_srcH)) {
+			pr_err("ERROR: cbcr scale exceed 8,"
+					"srcW=%d,srcH=%d,dstW=%d,dstH=%d\n",
+					cbcr_srcW,cbcr_srcH,cbcr_dstW,cbcr_dstH);
+		}
+	}
+
+	if(cbcr_srcW < cbcr_dstW)
+		cbr_hor_scl_mode = SCALE_UP;
+	else if(cbcr_srcW > cbcr_dstW)
+		cbr_hor_scl_mode = SCALE_DOWN;
+	else
+		cbr_hor_scl_mode = SCALE_NONE;
+
+	if(cbcr_srcH < cbcr_dstH)
+		cbr_ver_scl_mode = SCALE_UP;
+	else if(cbcr_srcH > cbcr_dstH)
+		cbr_ver_scl_mode = SCALE_DOWN;
+	else
+		cbr_ver_scl_mode = SCALE_NONE;
+#if 0
+	pr_err( "srcW:%d>>srcH:%d>>dstW:%d>>dstH:%d>>\n"
+			"yrgb:src:W=%d>>H=%d,dst:W=%d>>H=%d,H_mode=%d,V_mode=%d\n"
+			"cbcr:src:W=%d>>H=%d,dst:W=%d>>H=%d,H_mode=%d,V_mode=%d\n"
+			,srcW,srcH,dstW,dstH,yrgb_srcW,yrgb_srcH,yrgb_dstW,
+			yrgb_dstH,yrgb_hor_scl_mode,yrgb_ver_scl_mode,
+			cbcr_srcW,cbcr_srcH,cbcr_dstW,cbcr_dstH,
+			cbr_hor_scl_mode,cbr_ver_scl_mode);
+#endif
+	/*line buffer mode*/
+	if ((format == VOP_FMT_YUV422SP) ||
+			(format == VOP_FMT_YUV420SP)) {
+		if (cbr_hor_scl_mode == SCALE_DOWN) {
+			if ((cbcr_dstW > 3840) || (cbcr_dstW == 0)) {
+				pr_err("ERROR cbcr_dstW = %d\n",cbcr_dstW);                
+			} else if (cbcr_dstW > 2560) {
+				lb_mode = LB_RGB_3840X2;
+			} else if (cbcr_dstW > 1920) {
+				if (yrgb_hor_scl_mode == SCALE_DOWN) {
+					if(yrgb_dstW > 3840){
+						pr_err("ERROR yrgb_dst_width exceeds 3840\n");
+					}else if(yrgb_dstW > 2560){
+						lb_mode = LB_RGB_3840X2;
+					}else if(yrgb_dstW > 1920){
+						lb_mode = LB_RGB_2560X4;
+					}else{
+						pr_err("ERROR never run here!yrgb_dstW<1920 ==> cbcr_dstW>1920\n");
+					}
+				}
+			} else if (cbcr_dstW > 1280) {
+				lb_mode = LB_YUV_3840X5;
+			} else {
+				lb_mode = LB_YUV_2560X8;
+			}            
+		} else { /*SCALE_UP or SCALE_NONE*/
+			if ((cbcr_srcW > 3840) || (cbcr_srcW == 0)) {
+				pr_err("ERROR cbcr_srcW = %d\n",cbcr_srcW);
+			}else if(cbcr_srcW > 2560){                
+				lb_mode = LB_RGB_3840X2;
+			}else if(cbcr_srcW > 1920){
+				if(yrgb_hor_scl_mode == SCALE_DOWN){
+					if(yrgb_dstW > 3840){
+						pr_err("ERROR yrgb_dst_width exceeds 3840\n");
+					}else if(yrgb_dstW > 2560){
+						lb_mode = LB_RGB_3840X2;
+					}else if(yrgb_dstW > 1920){
+						lb_mode = LB_RGB_2560X4;
+					}else{
+						pr_err("ERROR never run here!yrgb_dstW<1920 ==> cbcr_dstW>1920\n");
+					}
+				}  
+			}else if(cbcr_srcW > 1280){
+				lb_mode = LB_YUV_3840X5;
+			}else{
+				lb_mode = LB_YUV_2560X8;
+			}            
+		}
+	}else {
+		if(yrgb_hor_scl_mode == SCALE_DOWN){
+			if ((yrgb_dstW > 3840) || (yrgb_dstW == 0)) {
+				pr_err("ERROR yrgb_dstW = %d\n",yrgb_dstW);
+			}else if(yrgb_dstW > 2560){
+				lb_mode = LB_RGB_3840X2;
+			}else if(yrgb_dstW > 1920){
+				lb_mode = LB_RGB_2560X4;
+			}else if(yrgb_dstW > 1280){
+				lb_mode = LB_RGB_1920X5;
+			}else{
+				lb_mode = LB_RGB_1280X8;
+			}            
+		}else{ /*SCALE_UP or SCALE_NONE*/
+			if ((yrgb_srcW > 3840) || (yrgb_srcW == 0)) {
+				pr_err("ERROR yrgb_srcW = %d\n",yrgb_srcW);
+			}else if(yrgb_srcW > 2560){
+				lb_mode = LB_RGB_3840X2;
+			}else if(yrgb_srcW > 1920){
+				lb_mode = LB_RGB_2560X4;
+			}else if(yrgb_srcW > 1280){
+				lb_mode = LB_RGB_1920X5;
+			}else{
+				lb_mode = LB_RGB_1280X8;
+			}            
+		}
+	}
+	//pr_err("lb_mode = %d;\n",lb_mode);
+
+	/*vsd/vsu scale ALGORITHM*/
+	yrgb_hsd_mode = SCALE_DOWN_BIL;/*not to specify*/
+	cbr_hsd_mode  = SCALE_DOWN_BIL;/*not to specify*/
+	yrgb_vsd_mode = SCALE_DOWN_BIL;/*not to specify*/
+	cbr_vsd_mode  = SCALE_DOWN_BIL;/*not to specify*/
+	switch(lb_mode){
+		case LB_YUV_3840X5:
+		case LB_YUV_2560X8:
+		case LB_RGB_1920X5:
+		case LB_RGB_1280X8: 	
+			yrgb_vsu_mode = SCALE_UP_BIC; 
+			cbr_vsu_mode  = SCALE_UP_BIC; 
+			break;
+		case LB_RGB_3840X2:
+			if(yrgb_ver_scl_mode != SCALE_NONE) {
+				pr_err("ERROR : not allow yrgb ver scale\n");
+			}
+			if(cbr_ver_scl_mode != SCALE_NONE) {
+				pr_err("ERROR : not allow cbcr ver scale\n");
+			}	     	  
+			break;
+		case LB_RGB_2560X4:
+			yrgb_vsu_mode = SCALE_UP_BIL; 
+			cbr_vsu_mode  = SCALE_UP_BIL; 	    
+			break;
+		default:
+			printk(KERN_WARNING "%s:un supported lb_mode:%d\n",
+					__func__,lb_mode);	
+			break;
+	}
+	//pr_err("yrgb:hsd=%d,vsd=%d,vsu=%d;cbcr:hsd=%d,vsd=%d,vsu=%d\n",
+	//		yrgb_hsd_mode,yrgb_vsd_mode,yrgb_vsu_mode,
+	//		cbr_hsd_mode,cbr_vsd_mode,cbr_vsu_mode);
+
+	/*SCALE FACTOR*/
+
+	/*(1.1)YRGB HOR SCALE FACTOR*/
+	switch(yrgb_hor_scl_mode){
+		case SCALE_NONE:
+			yrgb_xscl_factor = (1<<SCALE_FACTOR_DEFAULT_FIXPOINT_SHIFT);
+			break;
+		case SCALE_UP:
+			yrgb_xscl_factor = GET_SCALE_FACTOR_BIC(yrgb_srcW, yrgb_dstW);
+			break;
+		case SCALE_DOWN:
+			switch(yrgb_hsd_mode)
+			{
+				case SCALE_DOWN_BIL:
+					yrgb_xscl_factor = GET_SCALE_FACTOR_BILI_DN(yrgb_srcW, yrgb_dstW);
+					break;
+				case SCALE_DOWN_AVG:
+					yrgb_xscl_factor = GET_SCALE_FACTOR_AVRG(yrgb_srcW, yrgb_dstW);
+					break;
+				default :
+					printk(KERN_WARNING "%s:un supported yrgb_hsd_mode:%d\n",
+							__func__,yrgb_hsd_mode);		
+					break;
+			} 
+			break;
+		default :
+			printk(KERN_WARNING "%s:un supported yrgb_hor_scl_mode:%d\n",
+					__func__,yrgb_hor_scl_mode);	
+			break;
+	} /*yrgb_hor_scl_mode*/
+
+	/*(1.2)YRGB VER SCALE FACTOR*/
+	switch(yrgb_ver_scl_mode)
+	{
+		case SCALE_NONE:
+			yrgb_yscl_factor = (1<<SCALE_FACTOR_DEFAULT_FIXPOINT_SHIFT);
+			break;
+		case SCALE_UP  :
+			switch(yrgb_vsu_mode)
+			{
+				case SCALE_UP_BIL:
+					yrgb_yscl_factor = GET_SCALE_FACTOR_BILI_UP(yrgb_srcH, yrgb_dstH);
+					break;
+				case SCALE_UP_BIC:
+					if(yrgb_srcH < 3){
+						pr_err("yrgb_srcH should be greater than 3 !!!\n");
+					}                    
+					yrgb_yscl_factor = GET_SCALE_FACTOR_BIC(yrgb_srcH, yrgb_dstH);
+					break;
+				default :
+					printk(KERN_WARNING "%s:un supported yrgb_vsu_mode:%d\n",
+							__func__,yrgb_vsu_mode);			
+					break;
+			}
+			break;
+		case SCALE_DOWN:
+			switch(yrgb_vsd_mode)
+			{
+				case SCALE_DOWN_BIL:
+					yrgb_vScaleDnMult = __getHardWareVSkipLines(yrgb_srcH, yrgb_dstH);
+					yrgb_yscl_factor  = GET_SCALE_FACTOR_BILI_DN_VSKIP(yrgb_srcH, yrgb_dstH, yrgb_vScaleDnMult);                                 
+					if(yrgb_vScaleDnMult == 4){
+						yrgb_vsd_bil_gt4 = 1;
+						yrgb_vsd_bil_gt2 = 0;
+					}else if(yrgb_vScaleDnMult == 2){
+						yrgb_vsd_bil_gt4 = 0;
+						yrgb_vsd_bil_gt2 = 1;
+					}else{
+						yrgb_vsd_bil_gt4 = 0;
+						yrgb_vsd_bil_gt2 = 0;
+					}
+					break;
+				case SCALE_DOWN_AVG:
+					yrgb_yscl_factor = GET_SCALE_FACTOR_AVRG(yrgb_srcH, yrgb_dstH);
+					break;
+				default:
+					printk(KERN_WARNING "%s:un supported yrgb_vsd_mode:%d\n",
+							__func__,yrgb_vsd_mode);		
+					break;
+			} /*yrgb_vsd_mode*/
+			break;
+		default :
+			printk(KERN_WARNING "%s:un supported yrgb_ver_scl_mode:%d\n",
+					__func__,yrgb_ver_scl_mode);		
+			break;
+	}
+	scale_yrgb_x = yrgb_xscl_factor;
+	scale_yrgb_y = yrgb_yscl_factor;
+	vsd_yrgb_gt4 = yrgb_vsd_bil_gt4;
+	vsd_yrgb_gt2 = yrgb_vsd_bil_gt2;
+//	pr_err("yrgb:h_fac=%d,v_fac=%d,gt4=%d,gt2=%d\n",yrgb_xscl_factor,
+//			yrgb_yscl_factor,yrgb_vsd_bil_gt4,yrgb_vsd_bil_gt2);
+
+	/*(2.1)CBCR HOR SCALE FACTOR*/
+	switch(cbr_hor_scl_mode)
+	{
+		case SCALE_NONE:
+			cbcr_xscl_factor = (1<<SCALE_FACTOR_DEFAULT_FIXPOINT_SHIFT);
+			break;
+		case SCALE_UP  :
+			cbcr_xscl_factor = GET_SCALE_FACTOR_BIC(cbcr_srcW, cbcr_dstW);
+			break;
+		case SCALE_DOWN:
+			switch(cbr_hsd_mode)
+			{
+				case SCALE_DOWN_BIL:
+					cbcr_xscl_factor = GET_SCALE_FACTOR_BILI_DN(cbcr_srcW, cbcr_dstW);
+					break;
+				case SCALE_DOWN_AVG:
+					cbcr_xscl_factor = GET_SCALE_FACTOR_AVRG(cbcr_srcW, cbcr_dstW);
+					break;
+				default :
+					printk(KERN_WARNING "%s:un supported cbr_hsd_mode:%d\n",
+							__func__,cbr_hsd_mode);	
+					break;
+			}
+			break;
+		default :
+			printk(KERN_WARNING "%s:un supported cbr_hor_scl_mode:%d\n",
+					__func__,cbr_hor_scl_mode);	
+			break;
+	} /*cbr_hor_scl_mode*/
+
+	/*(2.2)CBCR VER SCALE FACTOR*/
+	switch(cbr_ver_scl_mode)
+	{
+		case SCALE_NONE:
+			cbcr_yscl_factor = (1<<SCALE_FACTOR_DEFAULT_FIXPOINT_SHIFT);
+			break;
+		case SCALE_UP  :
+			switch(cbr_vsu_mode)
+			{
+				case SCALE_UP_BIL:
+					cbcr_yscl_factor = GET_SCALE_FACTOR_BILI_UP(cbcr_srcH, cbcr_dstH);
+					break;
+				case SCALE_UP_BIC:
+					if(cbcr_srcH < 3) {
+						pr_err("cbcr_srcH should be greater than 3 !!!\n");
+					}                    
+					cbcr_yscl_factor = GET_SCALE_FACTOR_BIC(cbcr_srcH, cbcr_dstH);
+					break;
+				default :
+					printk(KERN_WARNING "%s:un supported cbr_vsu_mode:%d\n",
+							__func__,cbr_vsu_mode);		
+					break;
+			}
+			break;
+		case SCALE_DOWN:
+			switch(cbr_vsd_mode)
+			{
+				case SCALE_DOWN_BIL:
+					cbcr_vScaleDnMult = __getHardWareVSkipLines(cbcr_srcH, cbcr_dstH);
+					cbcr_yscl_factor  = GET_SCALE_FACTOR_BILI_DN_VSKIP(cbcr_srcH, cbcr_dstH, cbcr_vScaleDnMult);                    
+					if(cbcr_vScaleDnMult == 4){
+						cbcr_vsd_bil_gt4 = 1;
+						cbcr_vsd_bil_gt2 = 0;
+					}else if(cbcr_vScaleDnMult == 2){
+						cbcr_vsd_bil_gt4 = 0;
+						cbcr_vsd_bil_gt2 = 1;
+					}else{
+						cbcr_vsd_bil_gt4 = 0;
+						cbcr_vsd_bil_gt2 = 0;
+					}
+					break;
+				case SCALE_DOWN_AVG:
+					cbcr_yscl_factor = GET_SCALE_FACTOR_AVRG(cbcr_srcH, cbcr_dstH);
+					break;
+				default :
+					printk(KERN_WARNING "%s:un supported cbr_vsd_mode:%d\n",
+							__func__,cbr_vsd_mode);		
+					break;
+			}
+			break;
+		default :
+			printk(KERN_WARNING "%s:un supported cbr_ver_scl_mode:%d\n",
+					__func__,cbr_ver_scl_mode);			
+			break;
+	}
+	scale_cbcr_x = cbcr_xscl_factor;
+	scale_cbcr_y = cbcr_yscl_factor;
+	vsd_cbr_gt4  = cbcr_vsd_bil_gt4;
+	vsd_cbr_gt2  = cbcr_vsd_bil_gt2;	
+	if (lb_mode == 5)
+	       lb_mode = 4;	
+
+	VOP_SCL_SET(vop, win, yrgb_hor_scl_mode, yrgb_hor_scl_mode);
+	VOP_SCL_SET(vop, win, yrgb_ver_scl_mode, yrgb_ver_scl_mode);
+	VOP_SCL_SET(vop, win, cbr_hor_scl_mode, cbr_hor_scl_mode);
+	VOP_SCL_SET(vop, win, cbr_ver_scl_mode, cbr_ver_scl_mode);
+	VOP_SCL_SET(vop, win, lb_mode, lb_mode);
+	VOP_SCL_SET(vop, win, yrgb_hsd_mode, yrgb_hsd_mode);
+	VOP_SCL_SET(vop, win, cbr_hsd_mode, cbr_hsd_mode);
+	VOP_SCL_SET(vop, win, yrgb_vsd_mode, yrgb_vsd_mode);
+	VOP_SCL_SET(vop, win, cbr_vsd_mode, cbr_vsd_mode);
+	VOP_SCL_SET(vop, win, yrgb_vsu_mode, yrgb_vsu_mode); 
+	VOP_SCL_SET(vop, win, cbr_vsu_mode, cbr_vsu_mode); 
+	VOP_SCL_SET(vop, win, scale_yrgb_x, scale_yrgb_x);
+	VOP_SCL_SET(vop, win, scale_yrgb_y, scale_yrgb_y);
+	VOP_SCL_SET(vop, win, vsd_yrgb_gt4, vsd_yrgb_gt4);
+	VOP_SCL_SET(vop, win, vsd_yrgb_gt2, vsd_yrgb_gt2);
+	VOP_SCL_SET(vop, win, scale_cbcr_x, scale_cbcr_x);
+	VOP_SCL_SET(vop, win, scale_cbcr_y, scale_cbcr_y);
+	VOP_SCL_SET(vop, win, vsd_cbr_gt4, vsd_cbr_gt4);
+	VOP_SCL_SET(vop, win, vsd_cbr_gt2, vsd_cbr_gt2);
+
+//	pr_err("cbcr:h_fac=%d,v_fac=%d,gt4=%d,gt2=%d\n",cbcr_xscl_factor,
+//		cbcr_yscl_factor,cbcr_vsd_bil_gt4,cbcr_vsd_bil_gt2);
+	return 0;
+}
+
+
 /*
  * Caller must hold vsync_mutex.
  */
@@ -577,13 +1120,19 @@ static int vop_update_plane_event(struct drm_plane *plane,
 	struct vop *vop = to_vop(crtc);
 	struct drm_gem_object *obj;
 	struct rockchip_gem_object *rk_obj;
+	struct drm_gem_object *uv_obj;
+	struct rockchip_gem_object *rk_uv_obj;
+	struct rockchip_fb_obj *fb_obj;
+	struct rockchip_fb_obj *uv_fb_obj;
 	unsigned long offset;
 	unsigned int actual_w;
 	unsigned int actual_h;
 	unsigned int dsp_stx;
 	unsigned int dsp_sty;
 	unsigned int y_vir_stride;
+	unsigned int uv_vir_stride;
 	dma_addr_t yrgb_mst;
+	dma_addr_t uv_mst;
 	enum vop_data_format format;
 	uint32_t val;
 	bool is_alpha;
@@ -608,29 +1157,30 @@ static int vop_update_plane_event(struct drm_plane *plane,
 	};
 	bool can_position = plane->type != DRM_PLANE_TYPE_PRIMARY;
 
+#if 0
 	ret = drm_plane_helper_check_update(plane, crtc, fb,
 					    &src, &dest, &clip,
-					    DRM_PLANE_HELPER_NO_SCALING,
-					    DRM_PLANE_HELPER_NO_SCALING,
+					    0,
+					    0xffff,
 					    can_position, false, &visible);
 	if (ret)
 		return ret;
 
 	if (!visible)
 		return 0;
-
+#endif
 	is_alpha = is_alpha_support(fb->pixel_format);
 	format = vop_convert_format(fb->pixel_format);
 	if (format < 0)
 		return format;
 
-	obj = rockchip_fb_get_gem_obj(fb, 0);
-	if (!obj) {
+	fb_obj = rockchip_fb_get_gem_obj(fb, 0);
+	if (!fb_obj || !fb_obj->obj) {
 		DRM_ERROR("fail to get rockchip gem object from framebuffer\n");
 		return -EINVAL;
 	}
 
-	rk_obj = to_rockchip_obj(obj);
+	rk_obj = to_rockchip_obj(fb_obj->obj);
 
 	actual_w = (src.x2 - src.x1) >> 16;
 	actual_h = (src.y2 - src.y1) >> 16;
@@ -639,12 +1189,26 @@ static int vop_update_plane_event(struct drm_plane *plane,
 
 	dsp_stx = crtc_x + crtc->mode.htotal - crtc->mode.hsync_start;
 	dsp_sty = crtc_y + crtc->mode.vtotal - crtc->mode.vsync_start;
-
 	offset = (src.x1 >> 16) * (fb->bits_per_pixel >> 3);
 	offset += (src.y1 >> 16) * fb->pitches[0];
-	yrgb_mst = rk_obj->dma_addr + offset;
 
-	y_vir_stride = fb->pitches[0] / (fb->bits_per_pixel >> 3);
+	if (fb->pixel_format == DRM_FORMAT_NV12) {
+		uv_fb_obj = rockchip_fb_get_gem_obj(fb, 1);
+		if (!uv_fb_obj || !uv_fb_obj->obj) {
+			DRM_ERROR("fail to get rockchip gem object from framebuffer\n");
+			return -EINVAL;
+		}
+
+		rk_uv_obj = to_rockchip_obj(uv_fb_obj->obj);
+
+		y_vir_stride = fb->pitches[0] >> 2;
+		uv_vir_stride = y_vir_stride;
+		yrgb_mst = rk_obj->dma_addr + offset + fb_obj->offset;
+		uv_mst = rk_uv_obj->dma_addr + uv_fb_obj->offset;
+	} else {
+		yrgb_mst = rk_obj->dma_addr + offset + fb_obj->offset;
+		y_vir_stride = fb->pitches[0] / (fb->bits_per_pixel >> 3);
+	}
 
 	/*
 	 * If this plane update changes the plane's framebuffer, (or more
@@ -681,9 +1245,16 @@ static int vop_update_plane_event(struct drm_plane *plane,
 	VOP_WIN_SET(vop, win, format, format);
 	VOP_WIN_SET(vop, win, yrgb_vir, y_vir_stride);
 	VOP_WIN_SET(vop, win, yrgb_mst, yrgb_mst);
+	VOP_WIN_SET(vop, win, uv_vir, uv_vir_stride);
+	VOP_WIN_SET(vop, win, uv_mst, uv_mst);
+	if (win->scl)
+		_vop_cal_scl_fac(vop, win, actual_w, actual_h, crtc_w, crtc_h, format);
+
 	val = (actual_h - 1) << 16;
 	val |= (actual_w - 1) & 0xffff;
 	VOP_WIN_SET(vop, win, act_info, val);
+	val = (crtc_h - 1) << 16;
+	val |= (crtc_w - 1) & 0xffff;
 	VOP_WIN_SET(vop, win, dsp_info, val);
 	val = (dsp_sty - 1) << 16;
 	val |= (dsp_stx - 1) & 0xffff;

@@ -198,4 +198,122 @@ enum factor_mode {
 	ALPHA_SRC_GLOBAL,
 };
 
+enum
+{
+	SCALE_NONE = 0x0,
+	SCALE_UP   = 0x1,
+	SCALE_DOWN = 0x2
+};
+
+typedef enum {
+	BRIGHTNESS	= 0x0,
+	CONTRAST        = 0x1,
+	SAT_CON		= 0x2
+} bcsh_bcs_mode;
+
+typedef enum {
+	H_SIN		= 0x0,
+	H_COS       	= 0x1
+} bcsh_hue_mode;
+
+enum lb_mode {
+    LB_YUV_3840X5 = 0x0,
+    LB_YUV_2560X8 = 0x1,
+    LB_RGB_3840X2 = 0x2,
+    LB_RGB_2560X4 = 0x3,
+    LB_RGB_1920X5 = 0x4,
+    LB_RGB_1280X8 = 0x5 
+};
+
+enum sacle_up_mode {
+    SCALE_UP_BIL = 0x0,
+    SCALE_UP_BIC = 0x1
+};
+
+enum scale_down_mode {
+    SCALE_DOWN_BIL = 0x0,
+    SCALE_DOWN_AVG = 0x1
+};
+
+#define CUBIC_PRECISE  0
+#define CUBIC_SPLINE   1
+#define CUBIC_CATROM   2
+#define CUBIC_MITCHELL 3
+
+#define CUBIC_MODE_SELETION      CUBIC_PRECISE
+
+/*****************************************************************************************************/
+#define SCALE_FACTOR_BILI_DN_FIXPOINT_SHIFT   12   /* 4.12*/
+#define SCALE_FACTOR_BILI_DN_FIXPOINT(x)      ((INT32)((x)*(1 << SCALE_FACTOR_BILI_DN_FIXPOINT_SHIFT)))
+
+#define SCALE_FACTOR_BILI_UP_FIXPOINT_SHIFT   16   /* 0.16*/
+
+#define SCALE_FACTOR_AVRG_FIXPOINT_SHIFT   16   /*0.16*/
+#define SCALE_FACTOR_AVRG_FIXPOINT(x)      ((INT32)((x)*(1 << SCALE_FACTOR_AVRG_FIXPOINT_SHIFT)))
+
+#define SCALE_FACTOR_BIC_FIXPOINT_SHIFT    16   /* 0.16*/
+#define SCALE_FACTOR_BIC_FIXPOINT(x)       ((INT32)((x)*(1 << SCALE_FACTOR_BIC_FIXPOINT_SHIFT)))
+
+#define SCALE_FACTOR_DEFAULT_FIXPOINT_SHIFT    12  /*NONE SCALE,vsd_bil*/
+#define SCALE_FACTOR_VSDBIL_FIXPOINT_SHIFT     12  /*VER SCALE DOWN BIL*/
+
+/*****************************************************************************************************/
+
+/*#define GET_SCALE_FACTOR_BILI(src, dst) ((((src) - 1) << SCALE_FACTOR_BILI_FIXPOINT_SHIFT) / ((dst) - 1))*/
+/*#define GET_SCALE_FACTOR_BIC(src, dst)  ((((src) - 1) << SCALE_FACTOR_BIC_FIXPOINT_SHIFT) / ((dst) - 1))*/
+/*modified by hpz*/
+#define GET_SCALE_FACTOR_BILI_DN(src, dst)  ((((src)*2 - 3) << (SCALE_FACTOR_BILI_DN_FIXPOINT_SHIFT-1)) / ((dst) - 1))
+#define GET_SCALE_FACTOR_BILI_UP(src, dst)  ((((src)*2 - 3) << (SCALE_FACTOR_BILI_UP_FIXPOINT_SHIFT-1)) / ((dst) - 1))
+#define GET_SCALE_FACTOR_BIC(src, dst)      ((((src)*2 - 3) << (SCALE_FACTOR_BIC_FIXPOINT_SHIFT-1)) / ((dst) - 1))
+
+/*****************************************************************/
+/*NOTE: hardware为节省开销, srcH先抽行得到 (srcH+vScaleDnMult-1)/vScaleDnMult; 然后缩放*/
+#define GET_SCALE_DN_ACT_HEIGHT(srcH, vScaleDnMult) (((srcH)+(vScaleDnMult)-1)/(vScaleDnMult))
+
+/*#define VSKIP_MORE_PRECISE*/
+
+#ifdef VSKIP_MORE_PRECISE
+#define MIN_SCALE_FACTOR_AFTER_VSKIP        1.5f
+#define GET_SCALE_FACTOR_BILI_DN_VSKIP(srcH, dstH, vScaleDnMult) \
+            (GET_SCALE_FACTOR_BILI_DN(GET_SCALE_DN_ACT_HEIGHT((srcH), (vScaleDnMult)), (dstH)))
+#else
+#define MIN_SCALE_FACTOR_AFTER_VSKIP        1
+#define GET_SCALE_FACTOR_BILI_DN_VSKIP(srcH, dstH, vScaleDnMult) \
+            ((GET_SCALE_DN_ACT_HEIGHT((srcH), (vScaleDnMult)) == (dstH))\
+                            ? (GET_SCALE_FACTOR_BILI_DN((srcH), (dstH))/(vScaleDnMult))\
+                            : GET_SCALE_FACTOR_BILI_DN(GET_SCALE_DN_ACT_HEIGHT((srcH), (vScaleDnMult)), (dstH)))
+#endif
+/*****************************************************************/
+
+
+/*ScaleFactor must >= dst/src, or pixels at end of line may be unused*/
+/*ScaleFactor must < dst/(src-1), or dst buffer may overflow*/
+/*avrg old code:       ((((dst) << SCALE_FACTOR_AVRG_FIXPOINT_SHIFT))/((src) - 1)) hxx_chgsrc*/
+/*modified by hpz:*/
+#define GET_SCALE_FACTOR_AVRG(src, dst)  ((((dst) << (SCALE_FACTOR_AVRG_FIXPOINT_SHIFT+1)))/(2*(src) - 1))
+
+/*****************************************************************************************************/
+/*Scale Coordinate Accumulate, x.16*/
+#define SCALE_COOR_ACC_FIXPOINT_SHIFT     16
+#define SCALE_COOR_ACC_FIXPOINT_ONE       (1 << SCALE_COOR_ACC_FIXPOINT_SHIFT)
+#define SCALE_COOR_ACC_FIXPOINT(x)        ((INT32)((x)*(1 << SCALE_COOR_ACC_FIXPOINT_SHIFT)))
+#define SCALE_COOR_ACC_FIXPOINT_REVERT(x) ((((x) >> (SCALE_COOR_ACC_FIXPOINT_SHIFT-1)) + 1) >> 1)
+
+#define SCALE_GET_COOR_ACC_FIXPOINT(scaleFactor, factorFixpointShift)  \
+        ((scaleFactor) << (SCALE_COOR_ACC_FIXPOINT_SHIFT - (factorFixpointShift)))
+
+
+/*****************************************************************************************************/
+/*CoarsePart of Scale Coordinate Accumulate, used for pixel mult-add factor, 0.8*/
+#define SCALE_FILTER_FACTOR_FIXPOINT_SHIFT     8
+#define SCALE_FILTER_FACTOR_FIXPOINT_ONE       (1 << SCALE_FILTER_FACTOR_FIXPOINT_SHIFT)
+#define SCALE_FILTER_FACTOR_FIXPOINT(x)        ((INT32)((x)*(1 << SCALE_FILTER_FACTOR_FIXPOINT_SHIFT)))
+#define SCALE_FILTER_FACTOR_FIXPOINT_REVERT(x) ((((x) >> (SCALE_FILTER_FACTOR_FIXPOINT_SHIFT-1)) + 1) >> 1)
+
+#define SCALE_GET_FILTER_FACTOR_FIXPOINT(coorAccumulate, coorAccFixpointShift) \
+  (((coorAccumulate)>>((coorAccFixpointShift)-SCALE_FILTER_FACTOR_FIXPOINT_SHIFT))&(SCALE_FILTER_FACTOR_FIXPOINT_ONE-1))
+
+#define SCALE_OFFSET_FIXPOINT_SHIFT            8
+#define SCALE_OFFSET_FIXPOINT(x)              ((INT32)((x)*(1 << SCALE_OFFSET_FIXPOINT_SHIFT)))
+
 #endif /* _ROCKCHIP_DRM_VOP_H */

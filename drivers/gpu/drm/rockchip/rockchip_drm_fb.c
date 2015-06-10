@@ -20,15 +20,16 @@
 
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_gem.h"
+#include "rockchip_drm_fb.h"
 
 #define to_rockchip_fb(x) container_of(x, struct rockchip_drm_fb, fb)
 
 struct rockchip_drm_fb {
 	struct drm_framebuffer fb;
-	struct drm_gem_object *obj[ROCKCHIP_MAX_FB_BUFFER];
+	struct rockchip_fb_obj obj[ROCKCHIP_MAX_FB_BUFFER];
 };
 
-struct drm_gem_object *rockchip_fb_get_gem_obj(struct drm_framebuffer *fb,
+struct rockchip_fb_obj *rockchip_fb_get_gem_obj(struct drm_framebuffer *fb,
 					       unsigned int plane)
 {
 	struct rockchip_drm_fb *rk_fb = to_rockchip_fb(fb);
@@ -36,7 +37,7 @@ struct drm_gem_object *rockchip_fb_get_gem_obj(struct drm_framebuffer *fb,
 	if (plane >= ROCKCHIP_MAX_FB_BUFFER)
 		return NULL;
 
-	return rk_fb->obj[plane];
+	return &rk_fb->obj[plane];
 }
 EXPORT_SYMBOL_GPL(rockchip_fb_get_gem_obj);
 
@@ -47,7 +48,7 @@ static void rockchip_drm_fb_destroy(struct drm_framebuffer *fb)
 	int i;
 
 	for (i = 0; i < ROCKCHIP_MAX_FB_BUFFER; i++) {
-		obj = rockchip_fb->obj[i];
+		obj = rockchip_fb->obj[i].obj;
 		if (obj)
 			drm_gem_object_unreference_unlocked(obj);
 	}
@@ -63,7 +64,7 @@ static int rockchip_drm_fb_create_handle(struct drm_framebuffer *fb,
 	struct rockchip_drm_fb *rockchip_fb = to_rockchip_fb(fb);
 
 	return drm_gem_handle_create(file_priv,
-				     rockchip_fb->obj[0], handle);
+				     rockchip_fb->obj[0].obj, handle);
 }
 
 static struct drm_framebuffer_funcs rockchip_drm_fb_funcs = {
@@ -85,8 +86,11 @@ rockchip_fb_alloc(struct drm_device *dev, struct drm_mode_fb_cmd2 *mode_cmd,
 
 	drm_helper_mode_fill_fb_struct(&rockchip_fb->fb, mode_cmd);
 
-	for (i = 0; i < num_planes; i++)
-		rockchip_fb->obj[i] = obj[i];
+	for (i = 0; i < num_planes; i++) {
+		rockchip_fb->obj[i].obj = obj[i];
+		rockchip_fb->obj[i].pitch = mode_cmd->pitches[i];
+		rockchip_fb->obj[i].offset = mode_cmd->offsets[i];
+	}
 
 	ret = drm_framebuffer_init(dev, &rockchip_fb->fb,
 				   &rockchip_drm_fb_funcs);
@@ -136,9 +140,10 @@ rockchip_user_fb_create(struct drm_device *dev, struct drm_file *file_priv,
 			width * drm_format_plane_cpp(mode_cmd->pixel_format, i);
 
 		if (obj->size < min_size) {
-			drm_gem_object_unreference_unlocked(obj);
-			ret = -EINVAL;
-			goto err_gem_object_unreference;
+//			printk("---->yzq obj->size=%d min_size=%d\n",obj->size, min_size);
+			//drm_gem_object_unreference_unlocked(obj);
+			//ret = -EINVAL;
+			//goto err_gem_object_unreference;
 		}
 		objs[i] = obj;
 	}

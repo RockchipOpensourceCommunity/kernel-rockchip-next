@@ -15,6 +15,12 @@
 #ifndef _ROCKCHIP_DRM_FB_H
 #define _ROCKCHIP_DRM_FB_H
 
+struct rockchip_fb_obj {
+	struct drm_gem_object *obj;
+	uint32_t pitch; /* pitch for each plane */
+	uint32_t offset; /* offset of each plane */
+};
+
 struct drm_framebuffer *
 rockchip_drm_framebuffer_init(struct drm_device *dev,
 			      struct drm_mode_fb_cmd2 *mode_cmd,
@@ -23,6 +29,6 @@ void rockchip_drm_framebuffer_fini(struct drm_framebuffer *fb);
 
 void rockchip_drm_mode_config_init(struct drm_device *dev);
 
-struct drm_gem_object *rockchip_fb_get_gem_obj(struct drm_framebuffer *fb,
+struct rockchip_fb_obj *rockchip_fb_get_gem_obj(struct drm_framebuffer *fb,
 					       unsigned int plane);
 #endif /* _ROCKCHIP_DRM_FB_H */
